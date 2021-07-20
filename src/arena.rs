@@ -5,6 +5,8 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32, ops};
 /// the same size and representation as `Handle<T>`.
 type Index = NonZeroU32;
 
+use crate::span::Span;
+
 /// A strongly typed reference to an arena item.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -132,6 +134,9 @@ impl<T> Iterator for Range<T> {
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
+    #[cfg(feature="span")]
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
+    span_info: Vec<Span>,
 }
 
 impl<T> Default for Arena<T> {
@@ -148,7 +153,7 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
 impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub fn new() -> Self {
-        Arena { data: Vec::new() }
+        Arena { data: Vec::new(), #[cfg(feature = "span")] span_info: Vec::new() }
     }
 
     /// Extracts the inner vector.
@@ -192,6 +197,8 @@ impl<T> Arena<T> {
         let index =
             Index::new(position as u32).expect("Failed to append to Arena. Handle overflows");
         self.data.push(value);
+        #[cfg(feature = "span")]
+        self.span_info.push(Span::Unknown);
         Handle::new(index)
     }
 
@@ -225,12 +232,12 @@ impl<T> Arena<T> {
     }
 
     pub fn try_get(&self, handle: Handle<T>) -> Option<&T> {
-        self.data.get(handle.index.get() as usize - 1)
+        self.data.get(handle.index())
     }
 
     /// Get a mutable reference to an element in the arena.
     pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
-        self.data.get_mut(handle.index.get() as usize - 1).unwrap()
+        self.data.get_mut(handle.index()).unwrap()
     }
 
     /// Get the range of handles from a particular number of elements to the end.
@@ -238,6 +245,32 @@ impl<T> Arena<T> {
         Range {
             inner: old_length as u32..self.data.len() as u32,
             marker: PhantomData,
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn get_span(&self, handle: Handle<T>) -> Span {
+        #[cfg(feature = "span")] {
+            return self.span_info.get(handle.index()).map_or(Span::Unknown, |x| x.clone())
+        }
+        Span::Unknown
+    }
+
+    #[allow(unused_variables)]
+    pub fn set_span(&mut self, handle: Handle<T>, span: Span) {
+        #[cfg(feature = "span")] {
+            self.span_info[handle.index()].clone_from(&span);
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn set_span_if_unknown(&mut self, handle: Handle<T>, span: Span) {
+
+        #[cfg(feature = "span")] {
+            let ref mut existing = self.span_info[handle.index()];
+            if let Span::Unknown = existing {
+                existing.clone_from(&span);
+            }
         }
     }
 }

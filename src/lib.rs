@@ -154,6 +154,7 @@ pub mod back;
 pub mod front;
 pub mod proc;
 pub mod valid;
+mod span;
 
 pub use crate::arena::{Arena, Handle, Range};
 
