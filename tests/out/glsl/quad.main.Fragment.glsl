@@ -3,11 +3,6 @@
 precision highp float;
 precision highp int;
 
-struct VertexOutput {
-    vec2 uv;
-    vec4 position;
-};
-
 uniform highp sampler2D _group_0_binding_0;
 
 smooth in vec2 _vs2fs_location0;

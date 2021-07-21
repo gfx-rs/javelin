@@ -6,12 +6,14 @@ mod layouter;
 mod namer;
 mod terminator;
 mod typifier;
+mod unused;
 
 pub use index::IndexableLength;
 pub use layouter::{Alignment, InvalidBaseType, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
+pub use unused::{get_unused_items, UnusedItems};
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq)]
 pub enum ProcError {
