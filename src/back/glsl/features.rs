@@ -224,7 +224,12 @@ impl<'a, W> Writer<'a, W> {
             self.features.request(Features::COMPUTE_SHADER)
         }
 
-        for (_, ty) in self.module.types.iter() {
+        for (handle, ty) in self.module.types.iter() {
+            // Skip unused types
+            if self.unused_items.types.contains(&handle) {
+                continue;
+            }
+
             match ty.inner {
                 TypeInner::Scalar { kind, width } => self.scalar_required_features(kind, width),
                 TypeInner::Vector { kind, width, .. } => self.scalar_required_features(kind, width),
@@ -289,7 +294,12 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        for (_, global) in self.module.global_variables.iter() {
+        for (handle, global) in self.module.global_variables.iter() {
+            // Skip unused globals
+            if self.unused_items.global_variables.contains(&handle) {
+                continue;
+            }
+
             match global.class {
                 StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
                 StorageClass::Storage => self.features.request(Features::BUFFER_STORAGE),

@@ -317,6 +317,8 @@ pub struct Writer<'a, W> {
     block_id: IdGenerator,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
+    /// List of items that are unused by the target entrypoint and should not be output
+    unused_items: proc::UnusedItems,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -347,6 +349,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 pipeline_options.shader_stage == ep.stage && pipeline_options.entry_point == ep.name
             })
             .ok_or(Error::EntryPointNotFound)?;
+        let entry_point = &module.entry_points[ep_idx];
 
         // Generate a map with names required to write the module
         let mut names = crate::FastHashMap::default();
@@ -363,11 +366,12 @@ impl<'a, W: Write> Writer<'a, W> {
             features: FeaturesManager::new(),
             names,
             reflection_names: crate::FastHashMap::default(),
-            entry_point: &module.entry_points[ep_idx],
+            entry_point,
             entry_point_idx: ep_idx as u16,
 
             block_id: IdGenerator::default(),
             named_expressions: crate::NamedExpressions::default(),
+            unused_items: proc::get_unused_items(module, Some(entry_point)),
         };
 
         // Find all features required to print this module
@@ -453,6 +457,10 @@ impl<'a, W: Write> Writer<'a, W> {
         // This are always ordered because of the IR is structured in a way that you can't make a
         // struct without adding all of it's members first
         for (handle, ty) in self.module.types.iter() {
+            if self.unused_items.types.contains(&handle) {
+                continue;
+            }
+
             if let TypeInner::Struct { ref members, .. } = ty.inner {
                 // No needed to write a struct that also should be written as a global variable
                 let is_global_struct = self
@@ -572,13 +580,16 @@ impl<'a, W: Write> Writer<'a, W> {
             let name = self.names[&NameKey::Function(handle)].clone();
             let fun_info = &self.info[handle];
 
-            // Write the function
-            self.write_function(
-                back::FunctionType::Function(handle),
-                function,
-                fun_info,
-                &name,
-            )?;
+            // If the function isn't unused
+            if !self.unused_items.functions.contains(&handle) {
+                // Write the function
+                self.write_function(
+                    back::FunctionType::Function(handle),
+                    function,
+                    fun_info,
+                    &name,
+                )?;
+            }
 
             writeln!(self.out)?;
         }
@@ -777,6 +788,10 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
+        if self.unused_items.global_variables.contains(&handle) {
+            return Ok(());
+        }
+
         if self.options.version.supports_explicit_locations() {
             if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
